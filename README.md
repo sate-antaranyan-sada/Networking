@@ -1,11 +1,11 @@
-# Deployment Guide: WordPress on GCP + OpenVPN + Split‑DNS/NAT (3 Parts)
+# Deployment Guide: WordPress on GCP + OpenVPN + Split‑DNS/NAT
 
 This README provides a clean, three‑part flow for your setup:
 1. **Getting WordPress live on a GCP VM with HTTPS**
 2. **OpenVPN setup (server + client provisioning)**
 3. **Server/client config + Split‑DNS & NAT to reach WordPress on a private IP**
 
-> Replace `example.com`, VM names, and IPs with your real values. In the examples below, the WordPress VM’s private IP is `10.128.0.3`, the VPN subnet is `10.8.0.0/24`, and the VPN server address is `10.8.0.1`.
+> In the examples below, the WordPress VM’s private IP is `10.128.0.3`, the VPN subnet is `10.8.0.0/24`, and the VPN server address is `10.8.0.1`.
 
 ---
 
@@ -168,25 +168,21 @@ sudo systemctl status openvpn@openvpn-sate.am --no-pager -l
 > `openvpn-server@NAME` → `/etc/openvpn/server/NAME.conf`
 
 ### 5. Client profile (`.ovpn`) for macOS (OpenVPN Connect)
-Create `macbook-client.ovpn` (inline is convenient):
+Create `macbook-client.ovpn`:
 ```conf
 client
-dev tun
+dev tun #Use IP level vpn tunneling
 proto udp
 remote <your_vpn_server_public_ip_or_name> 1194
 resolv-retry infinite
 nobind
 persist-key
 persist-tun
-
-# Match server’s crypto
-cipher AES-256-GCM
-ncp-ciphers AES-256-GCM:AES-128-GCM
-auth SHA256
-tls-version-min 1.2
 remote-cert-tls server
-
-key-direction 1   # client uses 1 for tls-auth
+tls-auth ta.key 1
+key-direction 1
+cipher AES-256-CBC
+verb 3
 
 <ca>
 # paste ca.crt
@@ -234,7 +230,6 @@ server=8.8.8.8
 address=/example.com/10.128.0.3
 EOF
 
-sudo dnsmasq --test
 sudo systemctl enable dnsmasq
 sudo systemctl restart dnsmasq
 sudo ss -lunp | grep ':53'    # should show 10.8.0.1:53 (dnsmasq)
@@ -249,8 +244,6 @@ dig @10.8.0.1 google.com +short    # -> public IPs
 In `/etc/openvpn/openvpn-sate.am.conf` (already present from Part 2):
 ```conf
 push "dhcp-option DNS 10.8.0.1"
-# Optional macOS scoping:
-# push "dhcp-option DOMAIN-ROUTE example.com"
 ```
 Restart OpenVPN if edited:
 ```bash
